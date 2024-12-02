@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ppersist"
+authors = [
+    {name = "Daniel Wagenaar", email = "daw@caltech.edu"},
+]
+description = "Function fitting with errors on x and y"
+readme = "README.md"
+version = "0.9.0"
+dependencies = [
+    "numpy",
+    "scipy",
+]
