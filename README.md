@@ -29,7 +29,7 @@ initial estimate of parameter values, as in:
 
 ### Specifying uncertainties on _x_ and _y_ 
 
-What sets physfit apart is how you can specify measurement
+With physfit, it is particularly easy to specify measurement
 uncertainties on each of your data points:
 
     physfit.fit("exp", xx, yy, sy=sy)
