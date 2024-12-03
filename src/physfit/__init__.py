@@ -20,10 +20,6 @@
 
 """physfit - Function fitting with errors on both x and y
 
-A simple framework for curve fitting through (x, y) data. Beyond its
-ease of use, What makes physfit stand out is that it allows you to
-specify uncertainties not only on y-values, but also on x-values.
-
 The main interface is through the physfit.fit() function.
 
 """

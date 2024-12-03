@@ -3,9 +3,8 @@
 ## Introduction
 
 This package provides a simple framework for fitting functions to
-2-dimensional data. What makes physfit stand out is that it allows you
-to specify uncertainties not only on y-coordinates, but also on
-x-coordinates.
+two-dimensional data. It allows you to specify uncertainties not only
+on y-coordinates, but also on x-coordinates.
 
 ### Example of use
 
@@ -24,7 +23,7 @@ initial estimate of parameter values, as in:
 
     physfit.fit(lambda x, A, B: A*x + B, xx, yy, p0=[1, 0])
     
-(although in this particular example, you could have just used
+(although in this example, you could have just used
 “linear”).
 
 ### Specifying uncertainties on _x_ and _y_ 
