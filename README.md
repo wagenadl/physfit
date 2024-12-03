@@ -116,7 +116,7 @@ it than the other points, that impact is mitigated:
     for f in [f1, f2, f3]:
         plt.plot(x0a, f(x0a), '-')
         
-[Figure 1](./egs/eg1.png)
+![Figure 1](./egs/eg1.png)
 
 After that,
 
@@ -168,7 +168,7 @@ and the phase of a sinusoidal signal:
     plotwitherrors(xx, yy, 0*xx, sy+0*yy)
     plt.plot(xx, f1(xx))
     
-[Figure 2](./egs/eg2.png)
+![Figure 2](./egs/eg2.png)
 
 Following that,
 
@@ -225,7 +225,7 @@ _x_ and _y_, the results match the ground truth the closest.
     for f in [f1, f2, f3]:
         plt.plot(x0a, f(x0a))
 
-[Figure 3](./egs/eg3.png)
+![Figure 3](./egs/eg3.png)
 
     
 ### The eccentric quadratic
@@ -259,7 +259,7 @@ that parameter and get much tighter results:
         plotwitherrors(xx, yy, 0*xx, sy+0*yy)
  
  
-[Figure 4](./egs/eg4.png)
+![Figure 4](./egs/eg4.png)
  
  
 (You don’t _have_ to name the parameters to your lambda `A`, `B`,
