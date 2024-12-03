@@ -26,7 +26,7 @@ initial estimate of parameter values, as in:
 (although in this example, you could have just used
 “linear”).
 
-### Specifying uncertainties on _x_ and _y_ 
+### Specifying uncertainties
 
 With physfit, it is particularly easy to specify measurement
 uncertainties on each of your data points:
@@ -52,14 +52,17 @@ instance to plot the fitted curve:
 
     plt.plot(xxx, f(xxx))
     
-This works because `f` is a callable representation of the fitted
-function. Plotting ±1σ confidence interval around the fitted curve is
-almost as easy:
+This works because the return value from `physfit.fit` not only
+encapsulates the fitted parameters, but is also a callable
+representation of the fitted function.
+
+Plotting the ±1σ confidence interval around the fitted curve is almost
+as easy:
 
     plt.fill_between(xxx, f(xxx) - f.df(xxx), f(xxx) + f.df(xxx))
                      
-The object `f` also contains the *R*² value for the fit, as well as
-the χ² value (if you specified uncertainties at least on _y_) and the
+The object `f` also contains the *R*² value for the fit, 
+the χ² value (if you specified uncertainties at least on _y_), and the
 covariance matrix between the parameters.
 
 
