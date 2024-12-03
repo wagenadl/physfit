@@ -232,7 +232,7 @@ _x_ and _y_, the results match the ground truth the closest.
 
 As an example of the effect of correlations between fitted parameters,
 consider this dataset with a quadratic relationship between _x_ and
-_y_. If we fit _y_ = _A_ _x_² + _B_ _x_ + _C_ in this case, the
+_y_. If we fit _y_ = _A_ *x*² + _B_ _x_ + _C_ in this case, the
 covariance btween _B_ and _C_ is particularly large. As a consequence,
 the fit predictions become extremely uncertain if we ask the fitter to
 extrapolate even slightly.
