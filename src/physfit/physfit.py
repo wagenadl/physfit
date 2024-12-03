@@ -1,13 +1,72 @@
 #!/usr/bin/python3
 
+
+## physfit - Function fitting with errors on both x and y
+## Copyright (C) 2024  Daniel A. Wagenaar
+## 
+## This program is free software: you can redistribute it and/or
+## modify it under the terms of the GNU General Public License as
+## published by the Free Software Foundation, either version 3 of the
+## License, or (at your option) any later version.
+## 
+## This program is distributed in the hope that it will be useful, but
+## WITHOUT ANY WARRANTY; without even the implied warranty of
+## MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+## General Public License for more details.
+## 
+## You should have received a copy of the GNU General Public License
+## along with this program.  If not, see <https://www.gnu.org/licenses/>.
+
+
 import numpy as np
 from scipy.optimize import curve_fit
-import copy
+
+__all__ = ["FitResults", "fit"]
 
 maxfev = 10000
 
 
-class PhysFit:
+class FitResults:
+    """The results from a function fit
+
+    This object has the following attributes:
+
+    - p               - the fitted parameters as a vector p = [A, B, C, ...]
+    - s               - the uncertainties as a vector
+    - cov             - the covariance matrix of the parameters
+    - f               - the fitted function as a callable, i.e., f: X ↦ Y
+    - df              - a callable to calculate fit uncertainties,
+                        i.e., df: X ↦ dY.
+    - R2              - R² “coefficient of determination”
+    - chi2            - χ² value for the fit (if sy was given)
+    - form            - a string representation of the form of the function
+
+    In addition, the following are defined for convenience:
+
+    - A, B, C, ...    - the fitted parameter values individually
+    - sA, sB, sC, ... - the uncertainties on those parameters
+    - sAA, sAB, ...   - the coefficients of the covariance matrix of the
+                        parameters
+    
+    For compatibility with older versions, “apply” is provided as a
+    synonym for “f”. Additionally, the object may be called directly
+    (using “(...)” syntax) with the same effect as calling its “f”
+    attribute.
+
+    If “fit” is a FitResults object obtained as the result of fitting
+    with specified uncertainties on x and/or y, the fit results
+    without consideration of those uncertainties may be accessed as
+    “fit[0]”. The fit results with consideration of y but not x
+    uncertainties as “fit[1]”. (For compatibility with older versions,
+    the final fit results may be accessed as “fit[-1]” as well.)
+
+    Note: The “s” and “cov” attributes are corrected for χ². That is,
+    even if you get a large χ², the “s” and “cov” are reasonable. You
+    are just being informed that the uncertainties you passed in may
+    have been overly optimistic.
+
+    """
+
     def __init__(self):
         self.form = None # name of function
         self.foo = None # actual function
@@ -17,14 +76,22 @@ class PhysFit:
         self.chi2 = None # chi^2 value for the fit (iff SY given)
         self.sumsquares = None
         self.R2 = None # R-squared "coefficient of determination",
+        self.hassy = False
+        self.hassx = False
 
     def apply(self, xx=None):
+        """Equivalent to f(), for compatibility with old code"""
         if xx is None:
             xx = self.xx
         xx = np.array(xx)
+        return self.f(xx)
+
+    def f(self, xx):
+        """This is the fitted function
+        """
         return self.foo(xx, *self.p)
 
-    def dfdp(self, xx):
+    def _dfdp(self, xx):
         # the gradient vector at points xx
         K = len(self.p)
         res = []
@@ -37,8 +104,10 @@ class PhysFit:
             res.append((self.foo(xx, *p2) - self.foo(xx, *p1)) / dpk)
         return np.array(res)
 
-    def errorat(self, xx):
-        dfdp = self.dfdp(xx)
+    def df(self, xx):
+        """Uncertainties of fit result at location in input space
+        """
+        dfdp = self._dfdp(xx)
         K = len(self.p)
         xx = np.array(xx)
         res = np.zeros(xx.shape)
@@ -48,36 +117,110 @@ class PhysFit:
         return res ** 0.5
 
     def __repr__(self):
-        form = repr(self.foo) if self.form is None else self.form
-        s = f'''
-form: {form}
-p:    {self.p}
-s:    {self.s}
-'''
-        for k, line in enumerate(f"{self.cov}".split("\n")):
-            if k:
-                s += "      " + line + "\n"
+        K = len(self.p)
+        hdr = f"Fit of {len(self.xx)} points "
+        if self.hassx:
+            hdr += "with specified errors on X and Y"
+        elif self.hassy:
+            hdr += "with specified errors on Y"
+        else:
+            hdr += "without specified errors"
+        bits = self.form.split(" ")
+        if bits[0] == "<function":
+            if len(bits) >= 2 and bits[1] != "<lambda>":
+                res = [f"{hdr} to:", "", f"  y = {bits[1]}(x)", ""]
             else:
-                s += "cov:  " + line + "\n"
+                res = [f"{hdr} to lambda:", ""]
+        else:
+            res = [f"{hdr} to:", "", f"  y = {self.form}", ""]
+
+        for k in range(K):
+            p = self.p[k]
+            s = self.s[k]
+            prec = int(-min(np.floor(np.log10(s/3.5)),
+                            np.floor(np.log10(np.abs(p)/10 + 1e-99))))
+            if prec < 0:
+                prec = 0
+            # For python < 3.6:
+            #   fmt = f"{{:.{prec}f}}"
+            #   line = f"  {chr(65 + k)} = {fmt} ± {fmt}"
+            #   res.append(line.format(p, s)
+            res.append(f"  {chr(65 + k)} = {p:.{prec}f} ± {s:.{prec}f}")
+        res.append("")
+        # For cov, use smallest diag term to figure digits of precision
+        # and abs. largest to figure space needs
+        mag = 0
+        prec = 0
+        for k in range(K):
+            prec = max(prec, int(-np.floor(np.log10(self.cov[k,k]/10))))
+        if prec < 0:
+            prec = 0
+        mag = int(np.max(np.log10(np.round(np.abs(self.cov + 1e-99), prec))))
+        if mag < 0:
+            mag = 0
+        if prec < 0:
+            spc = mag + 2
+        else:
+            spc = mag + 3 + prec            
+        for k in range(K):
+            if k == (K-1)//2:
+                pfx = "cov = ["
+            else:
+                pfx = "      ["
+            bits = [f"{c:{spc}.{prec}f}" for c in self.cov[:,k]]
+            res.append(pfx + " ".join(bits) + "]")
+
+        res.append("") 
+        res.append(f"R² = {self.R2:.3f}")
         if self.chi2 is not None:
-            s += f'chi2: {self.chi2:.4g}\n'
-        if self.R2 is not None:
-            s += f'R2:   {self.R2:.4f}\n'
-        return s + '\n'
+            res.append(f"χ² = {self.chi2:4g}")
+            
+        return "\n".join(res)
 
+    def __getitem__(self, k):
+        K = len(self.fits) + 1
+        # we ourselves are implicitly part of the vector
+        if k < 0:
+            k = K + k
+        if k == K - 1:
+            return self
+        if k < 0 or k >= K:
+            raise IndexError("Prefit index out of range")
+        return self.fits[k]
 
+    def __call__(self, xx):
+        return self.f(xx)
 
-def p0_power(x, y):
+    def __getattr__(self, a):
+        K = len(self.p)
+        if len(a) == 1:
+            k = ord(a[0]) - ord('A')
+            if k >= 0 and k < K:
+                return self.p[k]
+        elif len(a) == 2 and a[0] == 's':
+            k = ord(a[1]) - ord('A')
+            if k >= 0 and k < K:
+                return self.s[k]
+        elif len(a) == 3 and a[0] == 's':
+            k = ord(a[1]) - ord('A')
+            k2 = ord(a[2]) - ord('A')
+            if k >= 0 and k < K:
+                if k2 >= 0 and k2 < K:
+                    return self.cov[k,k2]
+        raise AttributeError(f"'FitResults' object has no attribute '{a}'")
+
+    
+def _p0_power(x, y):
     p = np.polyfit(np.log(x), np.log(y), 1)
     return np.array([np.exp(p[1]), p[0]])
 
 
-def p0_exp(x, y):
+def _p0_exp(x, y):
     p = np.polyfit(x, np.log(y), 1)
     return np.array([np.exp(p[1]), p[0]])
 
 
-def p0_expc(x, y):
+def _p0_expc(x, y):
     lp1 = np.polyfit(x, y, 1)
     lp2 = np.polyfit(x, y, 2)
     sgnB = np.sign(lp2[0]) * np.sign(lp1[0])      
@@ -93,7 +236,7 @@ def p0_expc(x, y):
     return np.array([sgnA*np.exp(lp[1]), lp[0], c0])
 
 
-def p0_cos(x, y):
+def _p0_cos(x, y):
     def foo(x, a, b, c): return a*np.cos(b*x+c)
     p,s = curve_fit(foo, x, y)
     if p[0]<0:
@@ -104,7 +247,7 @@ def p0_cos(x, y):
     return p
 
 
-forms = {
+_forms = {
     'slope': ( 'A*x',
                lambda x, a: a*x,
                lambda x, a: a,
@@ -120,7 +263,7 @@ forms = {
     'power': ( 'A*x**B',
                lambda x, a,b: a*x**b,
                lambda x, a,b: a*b*x**(b-1),
-               p0_power ),
+               _p0_power ),
     'log': ( 'A*log(x) + B',
              lambda x, a,b: a*np.log(x) + b,
              lambda x, a,b: a/x,
@@ -128,59 +271,67 @@ forms = {
     'exp': ( 'A*exp(B*x)',
              lambda x, a,b: a*np.exp(b*x),
              lambda x, a,b: a*b*np.exp(b*x),
-             p0_exp ),
+             _p0_exp ),
     'expc': ( 'A*exp(B*x) + C',
               lambda x, a,b,c: a * np.exp(b*x) + c,
               lambda x, a,b,c: a*b * np.exp(b*x),
-              p0_expc ),
+              _p0_expc ),
     'cos': ( 'A*cos(B*x + C)',
              lambda x, a,b,c: a * np.cos(b*x + c),
              lambda x, a,b,c: -a*b * np.sin(b*x + c),
-             p0_cos )
+             _p0_cos )
 }
     
 
-def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
-    '''PHYSFIT Function fitting using errors on both X and Y
-    
-    fit = PHYSFIT(fform, x, y, sy, sx) fits the data (X ± SX, Y ± SY)
-    to the given functional form FFORM.
+def fit(form, x, y, sy=None, sx=None, sxy=None, p0=None):
+    '''Function fitting using errors on both X and Y
 
-    The result is a class containing:
-    
-      p:    fit parameters for fitting to (X ± SX, Y ± SY).
-      s:    standard errors on those parameters.
-      cov:  full covariance matrix for the fit parameters.
-      chi2: χ² value for the fit (only defined if SY is given).
-      R2:   R-squared "coefficient of determination"
+    Arguments
+    ---------
 
-    as well as a method “apply” that can be used to apply the fit
-    to new X values.
-    
-    FFORM may be one of several standard forms:
-    
-      slope:      y = A x
-      linear:     y = A x + B
-      quadratic:  y = A x^2 + B x + C
-      poly-N:     y = A x^N + B x^(N-1) + ... + Z
-      power:      y = A x^B
-      exp:        y = A exp(B x)
-      expc:       y = A exp(B x) + C
-      log:        y = A log(x) + B
-      cos:        y = A cos(B x + C)
+       form: functional form (see below)
+       x: x data (a vector)
+       y: y data (a vector)
+       sy: optional uncertainties on y data (scalar or vector)
+       sx: optional uncertainties on x data (ditto)
+       sxy: optional covariances between x and y errors (ditto)
+       p0: optional initial parameters
+
+    Returns
+    -------
+
+    A FitResults object containing the results of the fit.
+
+    Supported functional forms
+    --------------------------
+
+    The following standard forms are accepted:
+
+        slope:      y = A x
+        linear:     y = A x + B
+        quadratic:  y = A x^2 + B x + C
+        power:      y = A x^B
+        exp:        y = A exp(B x)
+        expc:       y = A exp(B x) + C
+        log:        y = A log(x) + B
+        cos:        y = A cos(B x + C)
+
+    In addition, the form “poly-N” is accepted for any 0 ≤ N ≤ 20:
+
+        poly-N:     y = A x^N + B x^(N-1) + ... + Z
     
     Alternatively, a callable may be given that takes a first vector
     argument of x-values followed by the fit parameters as separate
     arguments.
-    
-    PHYSFIT(fform, x, y, sy, sx, p0) specifies initial parameters
-    values.  This is optional for the standard forms, but required for
-    the functional form.
-    
-    Leave out SX to not specify errors on X.  Leave SY out to not
-    specify errors at all. If you only have errors on X and not on Y,
-    perform the fits backwards (i.e., fit X against Y instead of Y
-    against X.)
+
+    When one of the named forms is used, initial parameters are
+    optional. However, for the function form, they are required.
+
+    Fitting with or without specified uncertainties is supported. But
+    if you specify uncertainties on X, you must also specify
+    uncertainties on Y. (If you cannot, consider fitting backwards,
+    i.e., fit X against Y instead of Y against X.) Specified
+    uncertainties are interpreted as 1σ values.
     
     To specify known correlations between the errors in X and Y
     observations, use optional argument SXY to specify the covariance
@@ -190,10 +341,8 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
     cannot be estimated, an OptimizeWarning is generated. See
     numpy.seterr and the python warnings module for more information.
 
-    Note: The S and COV outputs are corrected for CHI2. That is, even
-    if you get a large CHI2, the returned S and COV are
-    reasonable. You are just being informed that the SX or SY you
-    passed in may have been overly optimistic.
+    This uses the scipy.optimize.curve_fit function with default "lm"
+    method.
 
     '''
 
@@ -213,11 +362,11 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
     else:
         sx = 0*x + np.array(sx)
 
-    if type(f)==str:
-        if f in forms:
-            form, foo, dfdx, fp0 = forms[f]
+    if type(form)==str:
+        if form in _forms:
+            form, foo, dfdx, fp0 = _forms[form]
             p0 = fp0(x, y)
-        elif f.startswith('poly-'):
+        elif form.startswith('poly-'):
             # Following is rather ugly way to synthesize functions with
             # call signatures like "def poly(x,a,b,c): return a*x**2+b*x+c"
             # This is necessary because curve_fit insists on passing each
@@ -248,8 +397,8 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
             raise ValueError(f'Unknown functional form: {f}')
     else:
         dfdx = None
-        form = repr(f)
-        foo = f
+        foo = form
+        form = repr(form)
         if p0 is None:
             raise ValueError('Must provide parameters for functional form')
         p0 = np.array(p0)
@@ -265,7 +414,7 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
     
     ## --------- Fit without SX or SY ----------
     p,cov = curve_fit(foo, x, y, p0, maxfev=maxfev)
-    fit = PhysFit()
+    fit = FitResults()
     fit.p = p
     fit.s = np.sqrt(np.diag(cov))
     fit.cov = cov
@@ -277,7 +426,7 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
     ## ---------- Fit with only SY -------------
     if np.max(sy)>0:
         p, cov = curve_fit(foo, x, y, p0, sigma=sy, maxfev=maxfev)
-        fit = PhysFit()
+        fit = FitResults()
         fit.p = p
         fit.sumsquares = np.sum((foo(x, *p) - y)**2 / sy**2)
         fit.chi2 = fit.sumsquares / (N - df)
@@ -285,6 +434,7 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
         ss0 = np.sum((y - np.mean(y))**2 / sy**2)
         fit.R2 = 1 - fit.sumsquares / (ss0 + EPS)
         fit.cov = cov
+        fit.hassy = True
         fits.append(fit)
 
     ## ---------- Fit with SX and SY -------------
@@ -294,8 +444,7 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
         #   sy_eff^2 = sy^2 + (df/dx)^2 * sx^2
         #
         # We iterate several times to get closer to optimal estimates of df/dx
-  
-        fit = copy.copy(fit)
+        fit = FitResults()
         ok = False
         for iter in range(5):
             if fit.p is None or any(np.isnan(fit.p)) \
@@ -330,11 +479,15 @@ def physfit(f, x, y, sy=None, sx=None, p0=None, sxy=None):
                 pass
         if not ok:
             raise err
+        fit.hassy = True
+        fit.hassx = True
         fits.append(fit)
 
     for k in range(len(fits)):
         fits[k].form = form
         fits[k].xx = x # for “apply”
         fits[k].foo = foo
-        
-    return fits[-1]
+
+    fit = fits.pop()
+    fit.fits = fits
+    return fit

@@ -18,12 +18,15 @@
 ## along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
-"""
-physfit - Function fitting with errors on both x and y
-This package provides a simple framework for fitting functions to
-2-dimensional data. What makes physfit stand out is that it allows you
-to specify uncertainties not only on y-coordinates, but also on
-x-coordinates."""
+"""physfit - Function fitting with errors on both x and y
 
-from .physfit import physfit
+A simple framework for curve fitting through (x, y) data. Beyond its
+ease of use, What makes physfit stand out is that it allows you to
+specify uncertainties not only on y-values, but also on x-values.
+
+The main interface is through the physfit.fit() function.
+
+"""
+
+from .physfit import *
 
