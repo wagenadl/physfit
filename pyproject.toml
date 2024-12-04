@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "ppersist"
+name = "physfit"
 authors = [
     {name = "Daniel Wagenaar", email = "daw@caltech.edu"},
 ]
