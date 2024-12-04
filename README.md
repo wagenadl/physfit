@@ -68,14 +68,10 @@ covariance matrix between the parameters.
 
 ## Installation
 
-Will soon be as easy as
+As easy as
 
     pip install physfit
     
-For now, please copy the file
-[“physfit.py”](./src/physfit/physfit.py) into your local Python
-environment.
-
 
 ## Fully worked examples
 
@@ -268,6 +264,12 @@ that parameter and get much tighter results:
 etc., but the attributes in the fit result _will_ be called `A`, `B`,
 etc., regardless, so sticking with the standard reduces confusion.)
 
+
+## Development
+
+Development of physfit is on [github](https://github.com/wagenadl/physfit).
+
+
 ## Acknowledgments
 
 The inspiration for physfit and an earlier (Matlab) version of the
@@ -275,3 +277,4 @@ software, came from a program that was in use in the “Ph 3” physics
 undergraduate lab at Caltech in the early 2000s. Much to my chagrin, I
 no longer have the notes that contained the name of its author. If you
 are that author or know their name, I would love to hear from you.
+

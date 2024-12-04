@@ -14,3 +14,13 @@ dependencies = [
     "numpy",
     "scipy",
 ]
+requires-python = ">=3.8"
+classifiers = [ 
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+  "Operating System :: OS Independent"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/wagenadl/physfit"
+
