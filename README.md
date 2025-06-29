@@ -1,4 +1,4 @@
-# physfit — Function fitting with errors on both x and y
+# physfit: Function fitting with errors on both x and y
 
 ## Introduction
 
