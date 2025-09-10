@@ -137,8 +137,13 @@ class FitResults:
         for k in range(K):
             p = self.p[k]
             s = self.s[k]
-            prec = int(-min(np.floor(np.log10(s/3.5)),
-                            np.floor(np.log10(np.abs(p)/10 + 1e-99))))
+            if np.isinf(s):
+                prec = int(-max(np.floor(np.log10(np.abs(p)/100 + 1e-99)),
+                                -3))
+            else:
+                prec = int(-np.floor(np.log10(s/3.5)))
+                if prec < -np.floor(np.log10(np.abs(p)/10 + 1e-99)):
+                    prec += 1
             if prec < 0:
                 prec = 0
             # For python < 3.6:
@@ -151,17 +156,21 @@ class FitResults:
         # and abs. largest to figure space needs
         mag = 0
         prec = 0
-        for k in range(K):
-            prec = max(prec, int(-np.floor(np.log10(self.cov[k,k]/10))))
-        if prec < 0:
-            prec = 0
-        mag = int(np.max(np.log10(np.round(np.abs(self.cov + 1e-99), prec))))
-        if mag < 0:
-            mag = 0
-        if prec < 0:
-            spc = mag + 2
-        else:
-            spc = mag + 3 + prec            
+        spc = 4
+        if not np.any(np.isinf(self.cov)):
+            for k in range(K):
+                prec = max(prec, int(-np.floor(np.log10(self.cov[k,k]/10))))
+            if prec < 0:
+                prec = 0
+            covs = np.round(np.abs(self.cov), prec)
+            covs[covs<1e-99] = 1e-99
+            mag = int(np.max(np.log10(covs)))
+            if mag < 0:
+                mag = 0
+            if prec < 0:
+                spc = mag + 2
+            else:
+                spc = mag + 3 + prec            
         for k in range(K):
             if k == (K-1)//2:
                 pfx = "cov = ["
@@ -237,14 +246,18 @@ def _p0_expc(x, y):
 
 
 def _p0_cos(x, y):
-    def foo(x, a, b, c): return a*np.cos(b*x+c)
-    p,s = curve_fit(foo, x, y)
-    if p[0]<0:
-        p[0] = -p[0]
-        p[2] += np.pi
-        if p[2] >= np.pi:
-            p[2] -= 2*np.pi
-    return p
+    x0 = np.min(x)
+    x1 = np.max(x)
+    dx = x1 - x0
+    xx = np.arange(x0, x1, dx / len(x))
+    yy = np.interp(xx, x, y)
+    p = np.fft.fft(yy - np.mean(yy))
+    i0 = np.argmax(np.abs(p[:len(p)//2]))
+    omega0 = i0/dx * 2*np.pi
+    a0 = np.std(yy) * 2**.5
+    z0 = np.exp(1j*omega0*xx)
+    phi0 = -np.angle(np.sum(z0*yy))
+    return np.array([a0, omega0, phi0])
 
 
 _forms = {
@@ -371,7 +384,7 @@ def fit(form, x, y, sy=None, sx=None, sxy=None, p0=None):
             # call signatures like "def poly(x,a,b,c): return a*x**2+b*x+c"
             # This is necessary because curve_fit insists on passing each
             # parameter as a separate argument.
-            N = int(f[5:])
+            N = int(form[5:])
             if N<=0 or N>20:
                 raise ValueError(f'Bad polynomic functional form {f}')
             form = []
@@ -413,7 +426,8 @@ def fit(form, x, y, sy=None, sx=None, sxy=None, p0=None):
     fits = []
     
     ## --------- Fit without SX or SY ----------
-    p,cov = curve_fit(foo, x, y, p0, maxfev=maxfev)
+    p,cov = curve_fit(foo, x, y, p0,
+                      maxfev=maxfev, method='trf')
     fit = FitResults()
     fit.p = p
     fit.s = np.sqrt(np.diag(cov))
@@ -425,7 +439,8 @@ def fit(form, x, y, sy=None, sx=None, sxy=None, p0=None):
 
     ## ---------- Fit with only SY -------------
     if np.max(sy)>0:
-        p, cov = curve_fit(foo, x, y, p0, sigma=sy, maxfev=maxfev)
+        p, cov = curve_fit(foo, x, y, p0, sigma=sy,
+                           maxfev=maxfev, method='trf')
         fit = FitResults()
         fit.p = p
         fit.sumsquares = np.sum((foo(x, *p) - y)**2 / sy**2)
@@ -465,7 +480,8 @@ def fit(form, x, y, sy=None, sx=None, sxy=None, p0=None):
     
             sy_eff = np.sqrt(sy**2 + dfdx_**2*sx**2 + dfdx_*sxy)
             try:
-                p, cov = curve_fit(foo, x, y, sigma=sy_eff, maxfev=maxfev)
+                p, cov = curve_fit(foo, x, y, sigma=sy_eff,
+                                   maxfev=maxfev, method='trf')
                 fit.p = p
                 fit.sumsquares = np.sum((foo(x, *p) - y)**2 / sy_eff**2)
                 fit.chi2 = fit.sumsquares / (N - df)
